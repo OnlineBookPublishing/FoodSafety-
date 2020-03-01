@@ -1,0 +1,215 @@
+pragma solidity ^0.4.0;
+
+contract Foodsafety {
+
+address public producer;
+address public foodproccompany; 
+address public food_distributor;
+address public retailstore;
+address public consumer;
+address public food_inspector;
+
+enum contractState { NotReady,Created,ProductRequestMade,ProductSold, ProcessedFoodReadyForInspection,
+InspectionResultSuccess,ProcFoodRequested,FoodItemRequested,FoodItemDispatchedToDistributor,DispatchToDistributor,ItemsSold, 
+RetailerPdtRequest,FoodItemDispatchedToRetailstore,StoreproductsInspected,PoultryMeatPurchased,CheckforViolation,
+Aborted}
+
+contractState public contState; 
+
+enum foodprocnpackageState {ReadyToSubmit, Inspected,SoldToDistributor,DispatchInspected, sellToDistributor}
+foodprocnpackageState public foodprocstate;
+
+enum distributorState {ItemsAwaited, ItemsReceived,RetailerReqReceived, ItemsSoldToRetailer}
+distributorState public distributorstate;
+
+enum retailerState {WaitingForDispatch, ItemsDispatched,ItemsInspectedAtStore,ItemsPurchasedByConsumer}
+retailerState public retState;
+
+enum breachType { StorageTemperatureViolated, Route}   
+    breachType public breach;
+  int result;//1 or 0 indicating the self_check result of package
+    int temperature; //track the tempertaure any integer
+    
+mapping(address=>foodprocnpackageState) public foodprocs;
+mapping(address=> distributorState) public distributorstatus;
+mapping(address=>retailerState)  public retailsale;
+  
+
+ uint  numberOfRequestsFromProcCompany; 
+ uint numberOfApprovalsByInspector;
+ uint numberOfRequestByRetailstore;
+
+//constructor
+
+function FoodSupplychain(){  //one contract per batch & farmeer/producer creates contract
+    producer= msg.sender;
+   food_inspector= 0x14723A09ACff6D2A60DcdF7aA4AFf308FDDC160C;
+   food_distributor=0x583031D1113aD414F02576BD6afaBfb302140225;
+   retailstore=0xdD870fA1b7C4700F2BD7f44238821C26f7392148;
+   //    IPFShashEHR= "QmXgm5QVTy8pRtKrTPmoWPGXNesehCpP4jjFMTpvGamc1p";
+    contState = contractState.NotReady;
+   numberOfRequestsFromProcCompany = 0;
+    numberOfRequestByRetailstore = 0;
+ 
+}
+
+ //modifiers
+     modifier  OnlyProducer(){
+        require(msg.sender == producer); 
+        _;
+    }
+    modifier NotProducer(){
+        require(msg.sender!=producer);
+        _;
+    }
+	 modifier  OnlyInspector(){
+        require(msg.sender == food_inspector); 
+        _;
+    }
+    modifier OnlyFoodProcCompany(){
+        require(msg.sender!=foodproccompany);
+        _;
+    }
+    	 modifier  OnlyDistributor(){
+        require(msg.sender == food_distributor); 
+        _;
+    }
+    	 modifier  OnlyRetailer(){
+        require(msg.sender == retailstore); 
+        _;
+    }
+     modifier  OnlyConsumer(){
+        require(msg.sender == consumer); 
+        _;
+    }
+ //events
+    event ContractCreated(address owner, string info);
+    event ProductRequestedbyCompany(address food_distributor, string msg);
+    event ProductSoldbyProducer(address producer, string info);
+    
+    event ProcessingDetailUpdated (address foodproccompany, string msg);
+    event FoodSafetyInspected (address food_inspector, string msg);
+    event ProcessedFoodRequested(address food_distributor, string msg);
+    
+    event ProcessedFoodSold(address foodproccompany, string info);
+    event FoodItemsRequested(address retailstore, string msg);
+    
+    event FoodItemSold(address food_distributor, string info);
+    
+    event InspectionCompleted(address food_inspector, string msg);
+    event MeatPurchased(address consumer, string msg);
+    
+    event TemperatureOutofRequiredRange(string msg, bool t, int br);
+    
+    
+   //functions
+    function createFoodSupplyChainContract()OnlyProducer {
+       require(contState == contractState.NotReady);
+       contState = contractState.Created;
+       ContractCreated(msg.sender, "Contract created and poultry products ready for sale");
+       }
+      function buyPoultryPdt()OnlyFoodProcCompany {
+           require(contState==contractState.Created);
+           contState=contractState.ProductRequestMade;
+           ProductRequestedbyCompany(msg.sender, "Poultry product requested");
+        }
+    function sellpdt() OnlyProducer{
+        require(contState==contractState.ProductRequestMade);
+           contState=contractState.ProductSold;
+           ProductSoldbyProducer(msg.sender, "Poultry product sold");
+    }
+    function updateProcessDetails()OnlyFoodProcCompany{
+        require(contState==contractState.ProductSold);
+        contState=contractState.ProcessedFoodReadyForInspection;
+        
+        ProcessingDetailUpdated(msg.sender,"Processed and packaged; Ready for safety standards inspection");
+    }
+    
+    function inspectFoodSafety(address foodproccompanyAddress)OnlyInspector public {
+  require(contState==contractState.ProcessedFoodReadyForInspection && foodprocs[foodproccompanyAddress]==foodprocnpackageState.ReadyToSubmit);
+          
+          foodprocs[foodproccompanyAddress]=foodprocnpackageState.Inspected;
+          contState=contractState.InspectionResultSuccess;
+          
+          FoodSafetyInspected(msg.sender, "Safety standards followed, Package can be shipped.");
+          numberOfRequestsFromProcCompany +=1;
+          numberOfApprovalsByInspector +=1;
+          }
+        
+function buyProcessedFood(address foodproccompanyAddress) OnlyDistributor public{
+require(contState==contractState.InspectionResultSuccess && foodprocs[foodproccompanyAddress]==foodprocnpackageState.Inspected);
+
+         foodprocs[foodproccompanyAddress]==foodprocnpackageState.DispatchInspected;
+         contState=contractState.DispatchToDistributor;
+         
+         ProcessedFoodRequested(msg.sender, "Products can be dispatched to distributor");
+            }
+
+       function sellProcFoodToDistributor(address distributingcompanyAddress) OnlyFoodProcCompany public{
+           
+        require(contState==contractState.DispatchToDistributor && distributorstatus[distributingcompanyAddress]== distributorState.ItemsAwaited);
+        
+       distributorstatus[distributingcompanyAddress]=distributorState.ItemsReceived;
+       contState=contractState.ItemsSold;
+       ProcessedFoodSold(msg.sender, "Items dispatched to distributor");
+        
+        }              
+           
+      function buyFoodItems(address distributingcompanyAddress)OnlyRetailer public{
+   require(contState==contractState.ItemsSold && distributorstatus[distributingcompanyAddress]==distributorState.ItemsReceived);
+   
+distributorstatus[distributingcompanyAddress]= distributorState.RetailerReqReceived;   
+contState=contractState.RetailerPdtRequest;
+
+FoodItemsRequested(msg.sender,"Food Items requested by Retail store..");
+numberOfRequestByRetailstore +=1;
+
+
+      }
+ function sellToRetailer(address retailerAddress) OnlyDistributor public {
+         
+require(contState==contractState.RetailerPdtRequest && retailsale[retailerAddress]==retailerState.WaitingForDispatch);
+          
+          retailsale[retailerAddress]=retailerState.ItemsDispatched;
+          contState=contractState.FoodItemDispatchedToRetailstore;
+          FoodItemSold(msg.sender, "Items dispatched to retail store.!");
+         }       
+         
+         /* Now the food inspector inspects the storage conditions*/
+         
+         function inspectFoodItems(address retailerAddress) OnlyInspector public{
+             
+require(contState==contractState.FoodItemDispatchedToRetailstore && retailsale[retailerAddress]==retailerState.ItemsDispatched);
+
+
+             retailsale[retailerAddress]=retailerState.ItemsInspectedAtStore;
+             contState=contractState.StoreproductsInspected;
+               numberOfApprovalsByInspector +=1;
+               
+               InspectionCompleted(msg.sender, "Storage standards followed; Food products safe for consumption");
+         }
+         
+         function buyMeat(address retailerAddress)OnlyConsumer public{
+             
+            require(contState==contractState.StoreproductsInspected && retailsale[retailerAddress]==retailerState.ItemsInspectedAtStore);
+            
+            retailsale[retailerAddress]=retailerState.ItemsPurchasedByConsumer;
+                 contState = contractState.PoultryMeatPurchased;
+            MeatPurchased(msg.sender, "Poultry product purchased");
+         }
+          
+ function breachFound(string info, breachType br, int value) OnlyInspector{
+     require(contState == contractState.CheckforViolation);
+      breach=br;
+        contState = contractState.Aborted;
+        if(breach == breachType.StorageTemperatureViolated){
+            temperature = value;
+            TemperatureOutofRequiredRange( info ,true, temperature);
+        }
+        }
+        
+      
+
+    
+    
+}
