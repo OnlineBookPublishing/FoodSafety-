@@ -201,15 +201,20 @@ require(contState==contractState.FoodItemDispatchedToRetailstore && retailsale[r
  function breachFound(string info, breachType br, int value) OnlyInspector{
      require(contState == contractState.CheckforViolation);
       breach=br;
-        contState = contractState.Aborted;
+         contState = contractState.Aborted;
         if(breach == breachType.StorageTemperatureViolated){
             temperature = value;
-            TemperatureOutofRequiredRange( info ,true, temperature);
+            TemperatureOutofRequiredRange( msg ,true, temperature);
         }
+         else if(breach == breachType.DamagedPackage){
+            opened = value;
+            AccidentalPackageDamaging(msg, true, opened);
         }
-        
+	  else if(breach == breachType.Route){
+            onTheWay = value;
+            OutofTrack(msg , true, onTheWay);
+        }
+	Recompense();   }       
       
-
-    
     
 }
